@@ -146,30 +146,42 @@ NX 上预装了 ROS2 Galactic、cyberdog 依赖库及 `colcon` 编译工具（�
 # 1. SSH 进 NX（前提：已通过上述方式解锁）
 ssh mi@192.168.55.1   # 密码 123
 
-# 2. 克隆本仓库（建议克隆到 /SDCARD 以节省 eMMC 空间，eMMC 仅 14G 且已用 72%）
+# 2. 修复 pip（NX 上的 Python 3.6 pip 会因 /etc/mr813_version 二进制文件触发 UnicodeDecodeError）
+sudo mv /etc/mr813_version /etc/mr813_version.bak
+python3 -m pip install shyaml
+sudo mv /etc/mr813_version.bak /etc/mr813_version
+
+# 3. 修复 libg2o 的 setup 警告（可选，不影响编译）
+sudo touch /opt/ros2/galactic/share/libg2o/local_setup.bash
+
+# 4. 克隆本仓库（建议克隆到 /SDCARD 以节省 eMMC 空间，eMMC 仅 14G 且已用 72%）
 cd /SDCARD
 git clone https://github.com/duoduosysa/cyberdog2.git cyberdog_ws
 cd cyberdog_ws
 
-# 3. 加载编译环境（cyberdog 的 setup.bash 会自动链式加载 galactic，只需 source 这一个）
-#    如果出现 "not found: .../libg2o/local_setup.bash" 警告可忽略，不影响编译
+# 5. 加载编译环境（cyberdog 的 setup.bash 会自动链式加载 galactic，只需 source 这一个）
 source /opt/ros2/cyberdog/setup.bash
 
-# 4a. 编译所有包（NX 上大约 30-60 分钟）
-colcon build --merge-install
+# 6. 安装 TensorRT 开发头文件（cyberdog_action 等包需要 NvInfer.h）
+sudo apt update && sudo apt install -y libnvinfer-dev
 
-# 4b. 或只编译某个包及其依赖（首次编译该包时用）
+# 7a. 编译所有包（NX 上大约 1-2 小时）
+#     注意：NX 只有 8GB 内存，-j 设太高会导致 OOM（内存不足）触发系统重启！
+export MAKEFLAGS="-j1"
+colcon build --merge-install --parallel-workers 1
+
+# 7b. 或只编译某个包及其依赖（首次编译该包时用）
 colcon build --merge-install --packages-up-to <包名>
 
-# 4c. 或只编译某个包（后续修改同一个包时用，更快）
+# 7c. 或只编译某个包（后续修改同一个包时用，更快）
 colcon build --merge-install --packages-select <包名>
 
-# 5. 替换到系统目录（lib + share + include 三个目录都要拷贝）
+# 8. 替换到系统目录（lib + share + include 三个目录都要拷贝）
 sudo cp -rf install/lib/<包名> /opt/ros2/cyberdog/lib/
 sudo cp -rf install/share/<包名> /opt/ros2/cyberdog/share/
 sudo cp -rf install/include/<包名> /opt/ros2/cyberdog/include/
 
-# 6. 重启生效
+# 9. 重启生效
 sudo reboot
 ```
 
@@ -196,6 +208,70 @@ sudo reboot
 | cyberdog_vp_demo        | 可视化编程   | https://github.com/szh-cn/cyberdog_vp_demo             |
 | cyberdog_action_demo    | 手势动作识别 | https://github.com/liangxiaowei00/cyberdog_action_demo |
 
+
+## MiRoboticsLab 开源仓库全景
+
+小米机器人实验室在 GitHub 上共有 30 个仓库（[MiRoboticsLab](https://github.com/MiRoboticsLab)），以下按用途分类整理。
+
+### 本仓库已包含（NX 主仓库 + 9 个子仓库）
+
+| 仓库 | 本地目录 | 说明 |
+|------|---------|------|
+| [cyberdog_ws](https://github.com/MiRoboticsLab/cyberdog_ws) | `/`（本仓库根目录） | NX 主仓库，启动模块 |
+| [bridges](https://github.com/MiRoboticsLab/bridges) | `bridges/` | ROS 消息/服务定义、APP 通信、CAN 封装 |
+| [devices](https://github.com/MiRoboticsLab/devices) | `devices/` | 设备驱动（BMS/LED/UWB/Touch 等） |
+| [interaction](https://github.com/MiRoboticsLab/interaction) | `interaction/` | 人机交互（语音/手势/GRPC/图传/快连） |
+| [manager](https://github.com/MiRoboticsLab/manager) | `manager/` | 系统管理（含 unlock_request 解锁节点） |
+| [motion](https://github.com/MiRoboticsLab/motion) | `motion/` | NX 侧运动指令管理与桥接 |
+| [sensors](https://github.com/MiRoboticsLab/sensors) | `sensors/` | 传感器驱动（GPS/雷达/TOF/超声波） |
+| [utils](https://github.com/MiRoboticsLab/utils) | `utils/` | 通用接口库 |
+| [cyberdog_nav2](https://github.com/MiRoboticsLab/cyberdog_nav2) | `cyberdog_nav2/` | 导航与算法任务管理 |
+| [cyberdog_tracking_base](https://github.com/MiRoboticsLab/cyberdog_tracking_base) | `cyberdog_tracking_base/` | 基于 Nav2 的跟踪/导航/Docking |
+
+### MR813 运控板相关（需单独下载）
+
+| 仓库 | 说明 | 推荐度 |
+|------|------|--------|
+| [cyberdog_locomotion](https://github.com/MiRoboticsLab/cyberdog_locomotion) | MR813 运动控制（MPC/WBC/RL），需 Docker 交叉编译 | ⭐⭐⭐⭐⭐ |
+| [loco_hl_example](https://github.com/MiRoboticsLab/loco_hl_example) | 运控高层 Python 示例（基本步态/自定义步态/组合动作） | ⭐⭐⭐ |
+| [cyberdog_motor_sdk](https://github.com/MiRoboticsLab/cyberdog_motor_sdk) | 电机 SDK，直接控制关节电机 | ⭐⭐⭐ |
+
+### 仿真相关
+
+| 仓库 | 说明 | 推荐度 |
+|------|------|--------|
+| [cyberdog_sim](https://github.com/MiRoboticsLab/cyberdog_sim) | Gazebo 仿真入口，拉取 locomotion + simulator | ⭐⭐⭐⭐⭐ |
+| [cyberdog_simulator](https://github.com/MiRoboticsLab/cyberdog_simulator) | 仿真器代码，被 cyberdog_sim 引用 | ⭐⭐⭐⭐ |
+
+### 视觉与导航（NX 上运行）
+
+| 仓库 | 说明 | 推荐度 |
+|------|------|--------|
+| [cyberdog_vision](https://github.com/MiRoboticsLab/cyberdog_vision) | AI 视觉检测/识别 | ⭐⭐ |
+| [cyberdog_miloc](https://github.com/MiRoboticsLab/cyberdog_miloc) | 视觉定位 | ⭐⭐ |
+| [cyberdog_camera](https://github.com/MiRoboticsLab/cyberdog_camera) | 摄像头驱动 | ⭐⭐ |
+| [cyberdog_laserslam](https://github.com/MiRoboticsLab/cyberdog_laserslam) | 激光 SLAM | ⭐⭐ |
+| [cyberdog_mivins](https://github.com/MiRoboticsLab/cyberdog_mivins) | 视觉惯性导航 (VIO) | ⭐⭐ |
+| [cyberdog_occmap](https://github.com/MiRoboticsLab/cyberdog_occmap) | 占据栅格地图 | ⭐⭐ |
+
+### 文档与资料
+
+| 仓库 | 说明 | 推荐度 |
+|------|------|--------|
+| [blogs](https://github.com/MiRoboticsLab/blogs) | 官方技术文档/教程（架构设计、Dockerfile 说明等） | ⭐⭐⭐⭐ |
+| [Cyberdog_MD](https://github.com/MiRoboticsLab/Cyberdog_MD) | 硬件设计资料 | ⭐⭐ |
+| [model_files](https://github.com/MiRoboticsLab/model_files) | 模型文件 | ⭐ |
+| [MuKA](https://github.com/MiRoboticsLab/MuKA) | 未知，2025-02 新建 | ⭐ |
+
+### 一般不需要
+
+| 仓库 | 原因 |
+|------|------|
+| [cyberdog_ros2](https://github.com/MiRoboticsLab/cyberdog_ros2) | CyberDog **1 代**的 ROS2 包，与 2 代架构不同 |
+| [realsense-ros](https://github.com/MiRoboticsLab/realsense-ros) | RealSense 官方 ROS 包的 fork，用官方的即可 |
+| [cyberdog_tracking](https://github.com/MiRoboticsLab/cyberdog_tracking) | 已被 cyberdog_tracking_base 替代 |
+| [cyberdog_visions_interfaces](https://github.com/MiRoboticsLab/cyberdog_visions_interfaces) | 视觉接口定义，体积小，单独用处不大 |
+| [cyberdog_tegra_kernel](https://github.com/MiRoboticsLab/cyberdog_tegra_kernel) | NX 内核源码，除非需要改内核 |
 
 ## 文档
 
