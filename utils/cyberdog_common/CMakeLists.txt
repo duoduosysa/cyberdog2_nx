@@ -62,22 +62,43 @@ install(
 # The system-installed cyberdog_common (/opt/ros2/cyberdog/) ships cyberdog_fds,
 # but this open-source overlay only builds cyberdog_log. Without re-exporting,
 # downstream packages (motion_manager, etc.) fail to find cyberdog_common::cyberdog_fds.
+#
+# CMake does not allow install(TARGETS) on IMPORTED targets, so we:
+# 1) Copy the .so into our install/lib via install(FILES)
+# 2) Generate a cmake export file that recreates the imported target for downstream packages
+# 3) Install the export file to share/cyberdog_common/cmake/
 set(_SYSTEM_FDS_LIB "/opt/ros2/cyberdog/lib/libcyberdog_fds.so")
 if(EXISTS ${_SYSTEM_FDS_LIB})
-  add_library(cyberdog_fds SHARED IMPORTED)
-  set_target_properties(cyberdog_fds PROPERTIES
-    IMPORTED_LOCATION ${_SYSTEM_FDS_LIB}
-    IMPORTED_SONAME "libcyberdog_fds.so"
-    INTERFACE_INCLUDE_DIRECTORIES "/opt/ros2/cyberdog/include;${CMAKE_CURRENT_SOURCE_DIR}/include"
-    INTERFACE_LINK_LIBRARIES "rclcpp::rclcpp;std_srvs::std_srvs__rosidl_generator_c;std_srvs::std_srvs__rosidl_typesupport_introspection_c;std_srvs::std_srvs__rosidl_typesupport_c;std_srvs::std_srvs__rosidl_generator_cpp;std_srvs::std_srvs__rosidl_typesupport_introspection_cpp;std_srvs::std_srvs__rosidl_typesupport_cpp"
-  )
-  install(
-    TARGETS cyberdog_fds
-    EXPORT cyberdog_fds
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
-    RUNTIME DESTINATION bin
-  )
+  # 1) Copy the .so to our install directory
+  install(FILES ${_SYSTEM_FDS_LIB} DESTINATION lib)
+
+  # 2) Generate cmake export file (matches the format ament_export_targets expects)
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fdsExport.cmake" "\
+# Re-exported closed-source cyberdog_fds from system install
+if(TARGET cyberdog_common::cyberdog_fds)
+  return()
+endif()
+
+get_filename_component(_IMPORT_PREFIX \"\${CMAKE_CURRENT_LIST_FILE}\" PATH)
+get_filename_component(_IMPORT_PREFIX \"\${_IMPORT_PREFIX}\" PATH)
+get_filename_component(_IMPORT_PREFIX \"\${_IMPORT_PREFIX}\" PATH)
+get_filename_component(_IMPORT_PREFIX \"\${_IMPORT_PREFIX}\" PATH)
+if(_IMPORT_PREFIX STREQUAL \"/\")
+  set(_IMPORT_PREFIX \"\")
+endif()
+
+add_library(cyberdog_common::cyberdog_fds SHARED IMPORTED)
+set_target_properties(cyberdog_common::cyberdog_fds PROPERTIES
+  INTERFACE_INCLUDE_DIRECTORIES \"\${_IMPORT_PREFIX}/include\;/opt/ros2/cyberdog/include\"
+  IMPORTED_LOCATION \"\${_IMPORT_PREFIX}/lib/libcyberdog_fds.so\"
+  IMPORTED_SONAME \"libcyberdog_fds.so\"
+)
+unset(_IMPORT_PREFIX)
+")
+
+  # 3) Install the export file
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fdsExport.cmake"
+    DESTINATION share/${PROJECT_NAME}/cmake/)
 endif()
 
 if(BUILD_TESTING)

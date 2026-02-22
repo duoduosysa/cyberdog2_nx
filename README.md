@@ -165,23 +165,44 @@ source /opt/ros2/cyberdog/setup.bash
 # 6. 安装 TensorRT 开发头文件（cyberdog_action 等包需要 NvInfer.h）
 sudo apt update && sudo apt install -y libnvinfer-dev
 
-# 7a. 编译所有包（NX 上大约 1-2 小时）
+# 7. 【重要】关于 cyberdog_fds 闭源库的说明（本仓库已修复，无需手动操作）
+#
+#    问题：系统预装的 cyberdog_common（/opt/ros2/cyberdog/）导出两个目标：
+#      - cyberdog_log（开源，本仓库有源码）
+#      - cyberdog_fds（闭源，小米 FDS 云存储 SDK 封装，源码未开源）
+#
+#    ROS2 的 overlay 机制：colcon 编译时，本仓库的 cyberdog_common 会覆盖系统版。
+#    但开源版本只有 cyberdog_log，没有 cyberdog_fds，导致 motion_manager 等
+#    下游包编译失败：
+#      "Target motion_manager links to cyberdog_common::cyberdog_fds but target not found"
+#
+#    修复方案（已应用到 utils/cyberdog_common/CMakeLists.txt）：
+#    检测系统预装的 /opt/ros2/cyberdog/lib/libcyberdog_fds.so 是否存在，
+#    如果存在则重新导入并导出为 cyberdog_common::cyberdog_fds，
+#    让 overlay 版本和系统版本导出相同的目标集。
+#
+#    相关修改见 utils/cyberdog_common/CMakeLists.txt 第 61-81 行。
+
+# 8a. 编译所有包（NX 上大约 2-3 小时）
 #     注意：NX 只有 8GB 内存，-j 设太高会导致 OOM（内存不足）触发系统重启！
+#     --allow-overriding：因为源码中的包和系统预装的重名（overlay 机制），
+#     新版 colcon 会要求显式确认覆盖，不加这个参数会报 warning 或阻塞。
+#     下面用 colcon list 自动获取所有包名，不用手写一百个包名。
 export MAKEFLAGS="-j1"
-colcon build --merge-install --parallel-workers 1
+colcon build --merge-install --parallel-workers 1  --allow-overriding $(colcon list --names-only | tr '\n' ' ')
 
-# 7b. 或只编译某个包及其依赖（首次编译该包时用）
-colcon build --merge-install --packages-up-to <包名>
+# 8b. 或只编译某个包及其依赖（首次编译该包时用）
+colcon build --merge-install --packages-up-to <包名> --allow-overriding <包名>
 
-# 7c. 或只编译某个包（后续修改同一个包时用，更快）
-colcon build --merge-install --packages-select <包名>
+# 8c. 或只编译某个包（后续修改同一个包时用，更快）
+colcon build --merge-install --packages-select <包名> --allow-overriding <包名>
 
-# 8. 替换到系统目录（lib + share + include 三个目录都要拷贝）
+# 9. 替换到系统目录（lib + share + include 三个目录都要拷贝）
 sudo cp -rf install/lib/<包名> /opt/ros2/cyberdog/lib/
 sudo cp -rf install/share/<包名> /opt/ros2/cyberdog/share/
 sudo cp -rf install/include/<包名> /opt/ros2/cyberdog/include/
 
-# 9. 重启生效
+# 10. 重启生效
 sudo reboot
 ```
 
