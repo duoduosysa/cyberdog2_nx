@@ -140,37 +140,42 @@ function get_not_unlocked()
 
 ### 推荐路径：在 NX 上直接编译
 
-NX 上已经有完整的编译环境（ROS2 Galactic + colcon + 所有依赖库都预装了），不需要 Docker，不需要交叉编译，不需要从小米服务器下载任何东西（Dockerfile 里那些链接可能已失效）。
+NX 上预装了 ROS2 Galactic、cyberdog 依赖库及 `colcon` 编译工具（已实测确认位于 `/usr/bin/colcon`），不需要 Docker，不需要交叉编译，不需要从小米服务器下载任何东西（Dockerfile 里那些链接可能已失效）。
 
 ```bash
 # 1. SSH 进 NX（前提：已通过上述方式解锁）
 ssh mi@192.168.55.1   # 密码 123
 
-# 2. 克隆本仓库
-cd ~
+# 2. 克隆本仓库（建议克隆到 /SDCARD 以节省 eMMC 空间，eMMC 仅 14G 且已用 72%）
+cd /SDCARD
 git clone https://github.com/duoduosysa/cyberdog2.git cyberdog_ws
 cd cyberdog_ws
 
-# 3. 加载编译环境
-source /opt/ros2/galactic/setup.bash
-source /opt/ros2/cyberdog/setup.bash   # 加载已安装的 cyberdog 依赖
+# 3. 加载编译环境（cyberdog 的 setup.bash 会自动链式加载 galactic，只需 source 这一个）
+#    如果出现 "not found: .../libg2o/local_setup.bash" 警告可忽略，不影响编译
+source /opt/ros2/cyberdog/setup.bash
 
-# 4a. 只编译单个你修改的包（推荐，快）
-colcon build --merge-install --packages-select <包名>
-# 几分钟搞定
-
-# 4b. 或编译所有包（慢，NX 上可能要 30-60 分钟）
+# 4a. 编译所有包（NX 上大约 30-60 分钟）
 colcon build --merge-install
 
-# 5. 替换到系统目录
+# 4b. 或只编译某个包及其依赖（首次编译该包时用）
+colcon build --merge-install --packages-up-to <包名>
+
+# 4c. 或只编译某个包（后续修改同一个包时用，更快）
+colcon build --merge-install --packages-select <包名>
+
+# 5. 替换到系统目录（lib + share + include 三个目录都要拷贝）
 sudo cp -rf install/lib/<包名> /opt/ros2/cyberdog/lib/
 sudo cp -rf install/share/<包名> /opt/ros2/cyberdog/share/
+sudo cp -rf install/include/<包名> /opt/ros2/cyberdog/include/
 
 # 6. 重启生效
 sudo reboot
 ```
 
-> **额外提醒**：NX 的存储空间有限（eMMC），`git clone` 全量代码 + 编译产物会占不少空间。建议先 `df -h` 查看剩余空间，如果不够可以只编译需要修改的包（`--packages-select`）。
+以上编译和部署步骤参考自小米官方文档：[Dockerfile 使用说明 - 三、docker 编译并替换狗里面的功能包](https://github.com/MiRoboticsLab/blogs/blob/rolling/docs/cn/dockerfile_instructions_cn.md)，原文针对 Docker 交叉编译场景，此处适配为 NX 本机编译。
+
+> **额外提醒**：NX 的存储空间有限（eMMC），`git clone` 全量代码 + 编译产物会占不少空间。建议先 `df -h` 查看剩余空间，如果不够可以只编译需要修改的包。
 
 ### Docker 交叉编译（备选）
 
