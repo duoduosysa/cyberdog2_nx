@@ -1,0 +1,94 @@
+// Copyright (c) 2023 Beijing Xiaomi Mobile Software Co., Ltd. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef ALGORITHM_MANAGER__EXECUTOR_AUTO_DOCK_HPP_
+#define ALGORITHM_MANAGER__EXECUTOR_AUTO_DOCK_HPP_
+
+#include <string>
+#include <memory>
+#include "algorithm_manager/executor_base.hpp"
+#include "protocol/msg/audio_play.hpp"
+
+namespace cyberdog
+{
+namespace algorithm
+{
+class ExecutorAutoDock : public ExecutorBase
+{
+  using SeatAdjustT = protocol::action::SeatAdjust;
+  using GoalHandleSeatAdjust = rclcpp_action::ClientGoalHandle<SeatAdjustT>;
+  using AutomaticRechargeT = mcr_msgs::action::AutomaticRecharge;
+  using GoalHandleAutomaticRecharge = rclcpp_action::ClientGoalHandle<AutomaticRechargeT>;
+  using NavigateToPoseT = nav2_msgs::action::NavigateToPose;
+  using GoalHandleNavigateToPose = rclcpp_action::ClientGoalHandle<NavigateToPoseT>;
+
+public:
+  explicit ExecutorAutoDock(std::string node_name);
+  void Start(const AlgorithmMGR::Goal::ConstSharedPtr goal) override;
+  void Stop(
+    const StopTaskSrv::Request::SharedPtr request,
+    StopTaskSrv::Response::SharedPtr response) override;
+  void Cancel() override;
+  void OnCancel();
+  bool GetParams();
+
+private:
+  // std::shared_ptr<cyberdog::algorithm::ExecutorBase> exe_laser_loc_ptr_ = nullptr;
+  // std::shared_ptr<cyberdog::algorithm::ExecutorBase> exe_ab_nav_ptr_ = nullptr;
+
+  rclcpp_action::Client<SeatAdjustT>::SharedPtr client_seat_adjust_ptr_;
+  rclcpp_action::Client<AutomaticRechargeT>::SharedPtr client_laser_charge_ptr_;
+  rclcpp_action::Client<NavigateToPoseT>::SharedPtr client_navtopose_ptr_;
+  rclcpp::Client<protocol::srv::AudioTextPlay>::SharedPtr audio_play_client_{nullptr};
+  rclcpp::CallbackGroup::SharedPtr callback_group_{nullptr};
+  GoalHandleAutomaticRecharge::SharedPtr laser_charge_goal_handle_;
+  GoalHandleSeatAdjust::SharedPtr seat_adjust_goal_handle_;
+  rclcpp::Subscription<protocol::msg::BmsStatus>::SharedPtr bms_sub_;  // add ym
+  bool is_power_wp_charging_;  // 充电标志
+  int seat_try_times_;
+
+  bool stage1_goal_done_;
+  bool stage2_goal_done_;  // 阶段2成功的标志
+  bool stage3_goal_done_;
+
+  bool stage1_enable_;
+  bool stage2_enable_;
+  bool stage3_enable_;
+  toml::value params_toml_;
+  geometry_msgs::msg::PoseStamped goal_pose;
+  std::condition_variable stage3_process_cv_;
+  std::mutex stage3_process_mutex_;
+  std::condition_variable stage3_self_process_cv_;
+  std::mutex stage3_self_process_mutex_;
+
+  // This section is for the stage2 client interface
+  void stage2_goal_response_callback(GoalHandleAutomaticRecharge::SharedPtr goal_handle);
+  void stage2_feedback_callback(
+    GoalHandleAutomaticRecharge::SharedPtr,
+    const std::shared_ptr<const AutomaticRechargeT::Feedback> feedback);
+  void stage2_result_callback(const GoalHandleAutomaticRecharge::WrappedResult & result);
+  bool stage2_send_goal();
+  // This section is for the seat_adjust stage client interface
+  void stage3_goal_response_callback(GoalHandleSeatAdjust::SharedPtr goal_handle);
+  void stage3_feedback_callback(
+    GoalHandleSeatAdjust::SharedPtr,
+    const std::shared_ptr<const SeatAdjustT::Feedback> feedback);
+  void stage3_result_callback(const GoalHandleSeatAdjust::WrappedResult & result);
+  bool stage3_send_goal();
+  void tempcallback(const protocol::msg::BmsStatus::SharedPtr msg);  // add ym
+  void OnlineAudioPlay(const std::string & text);
+};  // class ExecutorAutoDock
+}  // namespace algorithm
+}  // namespace cyberdog
+#endif  // ALGORITHM_MANAGER__EXECUTOR_AUTO_DOCK_HPP_

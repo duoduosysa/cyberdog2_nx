@@ -12,16 +12,7 @@ install/
 # swp files
 *.swp
 
-# inner repos
-bridges/
-devices/
-interaction/
-manager/
-motion/
-sensors/
-utils/
-cyberdog_nav2/
-visions/
+# inner repos (removed to merge all sub-repos into one)
 
 # examples and tests
 examples/
