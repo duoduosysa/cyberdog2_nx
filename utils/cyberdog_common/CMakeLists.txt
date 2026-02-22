@@ -96,7 +96,11 @@ set_target_properties(cyberdog_common::cyberdog_fds PROPERTIES
 unset(_IMPORT_PREFIX)
 ")
 
-  # 3) Install the export file
+  # 3) Generate a CONFIG_EXTRAS file that ament_package will auto-include for downstream packages
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fds-extras.cmake"
+    "include(\"\${cyberdog_common_DIR}/cyberdog_fdsExport.cmake\")\n")
+
+  # 4) Install the export file to the cmake directory
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fdsExport.cmake"
     DESTINATION share/${PROJECT_NAME}/cmake/)
 endif()
@@ -134,10 +138,10 @@ if(LOCAL_BUILD_TESTING)
     DESTINATION lib/${PROJECT_NAME})
 endif()
 ament_export_include_directories(include)
-if(EXISTS ${_SYSTEM_FDS_LIB})
-  ament_export_targets(cyberdog_log cyberdog_fds HAS_LIBRARY_TARGET)
-else()
-  ament_export_targets(cyberdog_log HAS_LIBRARY_TARGET)
-endif()
+ament_export_targets(cyberdog_log HAS_LIBRARY_TARGET)
 ament_export_dependencies(${dependencies})
-ament_package()
+if(EXISTS ${_SYSTEM_FDS_LIB})
+  ament_package(CONFIG_EXTRAS "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fds-extras.cmake")
+else()
+  ament_package()
+endif()
