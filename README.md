@@ -246,6 +246,96 @@ sudo reboot
 
 > **额外提醒**：NX 的存储空间有限（eMMC），`git clone` 全量代码 + 编译产物会占不少空间。建议先 `df -h` 查看剩余空间，如果不够可以只编译需要修改的包。
 
+## 系统通信架构
+
+CyberDog 2 内部各模块之间的通信方式：
+
+```
+                  音频板（独立硬件，自带 CPU + WiFi）
+                  功能：唤醒词检测、语音识别（本地/连小爱云端）
+                        │
+                        │ LCM (UDP 多播)
+                        │ audio_cyberdog_topic / cyberdog_audio_topic
+                        │
+                        ▼
+               ┌─────────────────────────────────┐                MR813 运控板
+  手机 APP     │     NX (Jetson Xavier NX)       │               ┌──────────────┐
+     │         │                                 │  LCM          │ cyberdog_    │
+     │ WiFi    │  ROS2 节点：                     │  (UDP 多播)   │  control     │
+     │ gRPC    │  · cyberdog_grpc   (APP 通信)    │──────────────►│  (MPC/WBC/RL)│
+     └────────►│  · cyberdog_audio  (语音桥接)    │◄──────────────│ manager      │
+               │  · motion_manager  (运动管理)    │               │  (系统管理)   │
+               │  · motion_action   (LCM 收发)   │               └──────────────┘
+               │  · device_manager  (设备管理)    │
+               │  · sensor_manager  (传感器管理)  │
+               │  · algorithm_manager(算法任务)   │
+               └──────────┬──────────┬───────────┘
+                          │          │
+                  CAN 总线 │          │ BLE 蓝牙
+              (embed_protocol)        │
+                          │          手机（首次配网）
+                          ▼          BLE 遥控器配件
+            ┌─────────────────────────────┐
+            │  CAN 外设：                    │
+            │  BMS（电池） · LED（灯效）      │
+            │  TOF（深度） · 超声波           │
+            │  UWB（定位） · 电子皮肤         │
+            └─────────────────────────────┘
+```
+
+所有外部设备（手机、音频板、MR813、CAN 外设）都只与 NX 通信，**NX 是唯一的中枢**。
+手机 APP 不能直接访问 MR813，完整链路为：
+`手机 APP → gRPC → NX cyberdog_grpc → ROS2 → motion_action → LCM → MR813`
+
+### NX ↔ MR813 运动通信协议（LCM）
+
+NX 和 MR813 之间通过 LCM（UDP 多播）通信，**不是 CAN 总线**。
+
+| LCM 地址 | 通道 | 方向 | 内容 |
+|----------|------|------|------|
+| `udpm://239.255.76.67:7671` | `robot_control_cmd` | NX→MR813 | 运动指令 |
+| `udpm://239.255.76.67:7670` | `robot_control_response` | MR813→NX | 运动状态回报 |
+| `udpm://239.255.76.67:7671` | `user_gait_file` | NX→MR813 | 自定义步态文件 |
+| `udpm://239.255.76.67:7671` | `user_gait_result` | MR813→NX | 步态定义结果 |
+| `udpm://239.255.76.67:7667` | `external_imu` | MR813→NX | IMU 数据 |
+| `udpm://239.255.76.67:7667` | `local_heightmap` | MR813→NX | 高程图 |
+| `udpm://239.255.76.67:7667` | `global_to_robot` | MR813→NX | 里程计 |
+| `udpm://239.255.76.67:7667` | `motor_temperature` | MR813→NX | 电机温度 |
+| `udpm://239.255.76.67:7669` | `state_estimator` | MR813→NX | 状态估计器 |
+
+**运动指令结构 `robot_control_cmd_lcmt`**（NX→MR813）：
+
+| 字段 | 类型 | 含义 |
+|------|------|------|
+| `mode` | int32 | 运动模式 |
+| `gait_id` | int32 | 步态 ID |
+| `life_count` | int32 | 生命计数（递增，MR813 用来检测通讯断开） |
+| `vel_des[3]` | float | 期望速度 [vx, vy, vyaw] |
+| `rpy_des[3]` | float | 期望姿态 [roll, pitch, yaw] |
+| `pos_des[3]` | float | 期望位置 |
+| `step_height[2]` | float | 抬腿高度 [前腿, 后腿] |
+| `acc_des[6]` | float | 期望加速度 |
+| `foot_pose[6]` | float | 足端姿态 |
+| `duration` | int32 | 执行时长 |
+| `contact` | int32 | 足端触地状态 |
+
+**运动回报结构 `robot_control_response_lcmt`**（MR813→NX）：
+
+| 字段 | 类型 | 含义 |
+|------|------|------|
+| `mode` | int32 | 当前运动模式 |
+| `gait_id` | int32 | 当前步态 ID |
+| `order_process_bar` | int32 | 指令执行进度 |
+| `switch_status` | int32 | 模式切换状态 |
+| `ori_error` | int32 | 姿态异常标志 |
+| `footpos_error` | int32 | 足端位置异常 |
+| `motor_error[12]` | int32 | 12 个电机错误码 |
+
+相关代码见：
+- 协议字定义：`motion/motion_action/include/motion_action/motion_macros.hpp`
+- LCM 收发实现：`motion/motion_action/src/motion_action.cpp`
+- LCM 桥接（IMU/里程计/电机温度）：`motion/motion_bridge/`
+
 ### Docker 交叉编译（备选）
 
 进入 tools 目录下，可使用 Dockerfile 文件编译镜像，具体步骤可参考：[镜像编译](https://github.com/MiRoboticsLab/blogs/blob/rolling/docs/cn/dockerfile_instructions_cn.md)
