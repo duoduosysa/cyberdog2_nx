@@ -167,21 +167,42 @@ sudo apt update && sudo apt install -y libnvinfer-dev
 
 # 7. 【重要】关于 cyberdog_fds 闭源库的说明（本仓库已修复，无需手动操作）
 #
-#    问题：系统预装的 cyberdog_common（/opt/ros2/cyberdog/）导出两个目标：
+#    ═══ 问题 ═══
+#    系统预装的 cyberdog_common（/opt/ros2/cyberdog/）导出两个 cmake 目标：
 #      - cyberdog_log（开源，本仓库有源码）
-#      - cyberdog_fds（闭源，小米 FDS 云存储 SDK 封装，源码未开源）
+#      - cyberdog_fds（闭源，小米 FDS 云存储 SDK 封装，依赖 galaxy-fds-sdk-cpp/Poco/crypto）
 #
-#    ROS2 的 overlay 机制：colcon 编译时，本仓库的 cyberdog_common 会覆盖系统版。
+#    ROS2 的 overlay 机制：colcon 编译时，本仓库的 cyberdog_common 覆盖系统版。
 #    但开源版本只有 cyberdog_log，没有 cyberdog_fds，导致 motion_manager 等
 #    下游包编译失败：
 #      "Target motion_manager links to cyberdog_common::cyberdog_fds but target not found"
 #
-#    修复方案（已应用到 utils/cyberdog_common/CMakeLists.txt）：
-#    检测系统预装的 /opt/ros2/cyberdog/lib/libcyberdog_fds.so 是否存在，
-#    如果存在则重新导入并导出为 cyberdog_common::cyberdog_fds，
-#    让 overlay 版本和系统版本导出相同的目标集。
+#    ═══ 修复过程（踩坑记录）═══
 #
-#    相关修改见 utils/cyberdog_common/CMakeLists.txt 第 61-81 行。
+#    尝试 1（失败）：add_library(cyberdog_fds SHARED IMPORTED) + install(TARGETS cyberdog_fds EXPORT ...)
+#      → CMake 报错：install TARGETS given target "cyberdog_fds" which does not exist
+#      → 原因：CMake 不允许对 IMPORTED 目标执行 install(TARGETS)，IMPORTED 目标是"引用别人的库"，
+#        不是自己编译的，CMake 拒绝负责安装它。
+#
+#    尝试 2（失败）：去掉 install(TARGETS)，但保留 ament_export_targets(cyberdog_log cyberdog_fds ...)
+#      → CMake 报错：INSTALL(EXPORT) given unknown export "cyberdog_fds"
+#      → 原因：ament_export_targets 内部会调用 install(EXPORT "cyberdog_fds")，
+#        但这个导出集需要先由 install(TARGETS ... EXPORT cyberdog_fds) 创建，我们没创建所以报错。
+#
+#    最终方案（成功）：手动生成 cmake 导出文件 + ament_package(CONFIG_EXTRAS) 注入
+#      1) install(FILES /opt/ros2/cyberdog/lib/libcyberdog_fds.so DESTINATION lib) — 拷贝 .so
+#      2) file(WRITE cyberdog_fdsExport.cmake ...) — 手写 cmake 文件，定义 IMPORTED 目标
+#      3) file(WRITE cyberdog_fds-extras.cmake ...) — 桥接文件，include 上面的导出文件
+#      4) ament_package(CONFIG_EXTRAS cyberdog_fds-extras.cmake) — 告诉 ament 在下游
+#         find_package(cyberdog_common) 时自动 include 这个桥接文件
+#      5) ament_export_targets 只导出 cyberdog_log（走正常 cmake 流程）
+#
+#    这样下游包 find_package(cyberdog_common) 时，ament 会：
+#      - 自动加载 cyberdog_logExport.cmake（cmake 标准流程生成）
+#      - 自动加载 cyberdog_fds-extras.cmake → cyberdog_fdsExport.cmake（我们手动生成）
+#      - 两个目标 cyberdog_common::cyberdog_log 和 cyberdog_common::cyberdog_fds 都可用
+#
+#    相关修改见 utils/cyberdog_common/CMakeLists.txt 第 61-106 行。
 
 # 8a. 编译所有包（NX 上大约 2-3 小时）
 #     注意：NX 只有 8GB 内存，-j 设太高会导致 OOM（内存不足）触发系统重启！

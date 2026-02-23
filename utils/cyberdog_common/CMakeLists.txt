@@ -63,44 +63,30 @@ install(
 # but this open-source overlay only builds cyberdog_log. Without re-exporting,
 # downstream packages (motion_manager, etc.) fail to find cyberdog_common::cyberdog_fds.
 #
-# CMake does not allow install(TARGETS) on IMPORTED targets, so we:
-# 1) Copy the .so into our install/lib via install(FILES)
-# 2) Generate a cmake export file that recreates the imported target for downstream packages
-# 3) Install the export file to share/cyberdog_common/cmake/
+# Since cyberdog_fds is a system library at a fixed path on NX, we use absolute paths
+# instead of relative _IMPORT_PREFIX (which caused semicolon escaping issues in file(WRITE)).
 set(_SYSTEM_FDS_LIB "/opt/ros2/cyberdog/lib/libcyberdog_fds.so")
+set(_SYSTEM_FDS_INC "/opt/ros2/cyberdog/include")
 if(EXISTS ${_SYSTEM_FDS_LIB})
-  # 1) Copy the .so to our install directory
-  install(FILES ${_SYSTEM_FDS_LIB} DESTINATION lib)
-
-  # 2) Generate cmake export file (matches the format ament_export_targets expects)
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fdsExport.cmake" "\
-# Re-exported closed-source cyberdog_fds from system install
-if(TARGET cyberdog_common::cyberdog_fds)
-  return()
+  # Generate cmake export file using configure_file for reliable content generation
+  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fdsExport.cmake"
+"# Re-exported closed-source cyberdog_fds from system install
+if(NOT TARGET cyberdog_common::cyberdog_fds)
+  add_library(cyberdog_common::cyberdog_fds SHARED IMPORTED)
+  set_target_properties(cyberdog_common::cyberdog_fds PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES \"${_SYSTEM_FDS_INC}\"
+    IMPORTED_LOCATION \"${_SYSTEM_FDS_LIB}\"
+    IMPORTED_SONAME \"libcyberdog_fds.so\"
+  )
 endif()
-
-get_filename_component(_IMPORT_PREFIX \"\${CMAKE_CURRENT_LIST_FILE}\" PATH)
-get_filename_component(_IMPORT_PREFIX \"\${_IMPORT_PREFIX}\" PATH)
-get_filename_component(_IMPORT_PREFIX \"\${_IMPORT_PREFIX}\" PATH)
-get_filename_component(_IMPORT_PREFIX \"\${_IMPORT_PREFIX}\" PATH)
-if(_IMPORT_PREFIX STREQUAL \"/\")
-  set(_IMPORT_PREFIX \"\")
-endif()
-
-add_library(cyberdog_common::cyberdog_fds SHARED IMPORTED)
-set_target_properties(cyberdog_common::cyberdog_fds PROPERTIES
-  INTERFACE_INCLUDE_DIRECTORIES \"\${_IMPORT_PREFIX}/include\;/opt/ros2/cyberdog/include\"
-  IMPORTED_LOCATION \"\${_IMPORT_PREFIX}/lib/libcyberdog_fds.so\"
-  IMPORTED_SONAME \"libcyberdog_fds.so\"
-)
-unset(_IMPORT_PREFIX)
 ")
 
-  # 3) Generate a CONFIG_EXTRAS file that ament_package will auto-include for downstream packages
+  # Generate a CONFIG_EXTRAS bridge file for ament_package
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fds-extras.cmake"
-    "include(\"\${cyberdog_common_DIR}/cyberdog_fdsExport.cmake\")\n")
+"include(\"\${cyberdog_common_DIR}/cyberdog_fdsExport.cmake\")
+")
 
-  # 4) Install the export file to the cmake directory
+  # Install the export file to the cmake directory
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cyberdog_fdsExport.cmake"
     DESTINATION share/${PROJECT_NAME}/cmake/)
 endif()
