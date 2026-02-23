@@ -145,8 +145,10 @@ cd cyberdog_ws
 # 5. 加载编译环境（cyberdog 的 setup.bash 会自动链式加载 galactic，只需 source 这一个）
 source /opt/ros2/cyberdog/setup.bash
 
-# 6. 安装 TensorRT 开发头文件（cyberdog_action 等包需要 NvInfer.h）
-sudo apt update && sudo apt install -y libnvinfer-dev
+# 6. 安装编译所需的系统开发库
+sudo apt update && sudo apt install -y libnvinfer-dev libncurses-dev
+#   libnvinfer-dev  — cyberdog_action 等包需要 NvInfer.h（TensorRT 头文件）
+#   libncurses-dev  — cyberdog_vp_terminal 需要 ncurses.h（终端 UI 库）
 
 # 7. 【重要】关于 cyberdog_fds 闭源库的说明（本仓库已修复，无需手动操作）
 #
@@ -201,12 +203,42 @@ colcon build --merge-install --packages-up-to <包名> --allow-overriding <包�
 # 8c. 或只编译某个包（后续修改同一个包时用，更快）
 colcon build --merge-install --packages-select <包名> --allow-overriding <包名>
 
-# 9. 替换到系统目录（lib + share + include 三个目录都要拷贝）
+# ═══════════════════════════════════════════════════════════════
+# 9. 部署：替换到系统目录
+# ═══════════════════════════════════════════════════════════════
+#
+# ── 替换前：备份原装 + 记录当前状态 ──
+ros2 node list > /home/mi/nodes_before.txt
+ros2 topic list > /home/mi/topics_before.txt
+sudo cp -r /opt/ros2/cyberdog /SDCARD/cyberdog.bak   # 备份放 /SDCARD，eMMC 空间不够
+
+# ── 9a. 单包替换（推荐，风险最小）──
+#    只替换你修改过的那个包，其他包保持原装不动。
 sudo cp -rf install/lib/<包名> /opt/ros2/cyberdog/lib/
 sudo cp -rf install/share/<包名> /opt/ros2/cyberdog/share/
 sudo cp -rf install/include/<包名> /opt/ros2/cyberdog/include/
 
+# ── 9b. 全量替换（仅用于验证整个仓库编译结果是否可用）──
+#    注意：不要直接 cp install/* ，因为 install/ 下的 setup.bash 等文件
+#    里硬编码了 /SDCARD/cyberdog_ws/install 路径，会覆盖系统的正确路径。
+#    只拷贝 lib/ share/ include/ bin/ 四个子目录。
+for d in lib share include bin; do sudo cp -rf install/$d/* /opt/ros2/cyberdog/$d/; done
+
 # 10. 重启生效
+sudo reboot
+
+# ── 替换后：验证 ──
+ros2 node list > /home/mi/nodes_after.txt
+ros2 topic list > /home/mi/topics_after.txt
+diff /home/mi/nodes_before.txt /home/mi/nodes_after.txt
+diff /home/mi/topics_before.txt /home/mi/topics_after.txt
+#   diff 没输出 → 节点/话题完全一致，替换成功
+#   少了节点   → 某个包有问题，用 journalctl -xe 查看日志排查
+#   APP 连接   → 确认手机 APP 能正常连接和控制
+
+# ── 如果出问题：回滚 ──
+sudo rm -rf /opt/ros2/cyberdog
+sudo mv /SDCARD/cyberdog.bak /opt/ros2/cyberdog
 sudo reboot
 ```
 
