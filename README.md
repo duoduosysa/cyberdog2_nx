@@ -7,23 +7,6 @@
 
 原始子仓库来源：[MiRoboticsLab/cyberdog_ws](https://github.com/MiRoboticsLab/cyberdog_ws)（rolling 分支）
 
-
-
-| 仓库名称               | 仓库地址                                                | 主要功能                                                     | 设计文档                                                     |
-| ---------------------- | --------------------------- | ------------------------------- | ------------------------------------------- |
-| cyberdog_ws            | https://github.com/MiRoboticsLab/cyberdog_ws            | 启动模块                                                     | [启动模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_bringup_cn)<br/> |
-| manager                | https://github.com/MiRoboticsLab/manager                | 全局管理节点                                                 | [管理模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_manager_cn)<br/> |
-| bridges                | https://github.com/MiRoboticsLab/bridges                | ros消息服务定义文件<br/>与app端通讯程序<br/>can数据收发封装库 | [grpc通信模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_grpc_cn) |
-| devices                | https://github.com/MiRoboticsLab/devices                | 设备管理节点<br/>bms数据发布插件<br/>led设置插件<br/>touch插件<br/>uwb插件 | [设备管理模块](https://miroboticslab.github.io/blogs/#/cn/device_manager_cn)<br/>[bms模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_bms_cn)<br/>[LED模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_led_cn)<br/>[touch模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_touch_cn)<br/>[uwb模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_uwb_cn)<br/> |
-| motion                 | https://github.com/MiRoboticsLab/motion                 | 运控管理                                                     | [运动管理模块](https://miroboticslab.github.io/blogs/#/cn/motion_manager_cn)<br/> |
-| sensors                | https://github.com/MiRoboticsLab/sensors                | 传感器节点<br/>gps插件<br/>雷达插件<br/>tof插件<br/>超声插件 | [传感器模块](https://miroboticslab.github.io/blogs/#/cn/sensor_manager_cn)<br/>[gps模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_gps_cn)<br/>[雷达模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_lidar_cn)<br/>[tof模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_tof_cn)<br/>[超声模块](https://miroboticslab.github.io/blogs/#/cn/cyberdog_ultrasonic_cn)<br/> |
-| interaction            | https://github.com/MiRoboticsLab/interaction            | 语音节点<br/>可视化编程节点<br/>小爱训练词节点<br/>图传节点<br/>快连节点 | [语音模块]()<br/>[可视化编程模块]()<br/>[语音训练词模块]()<br/>[图传模块]()<br/>[快连模块]()<br/> |
-| cyberdog_nav2          | https://github.com/MiRoboticsLab/cyberdog_nav2           | 算法任务管理相关                                             | [算法任务管理](https://miroboticslab.github.io/blogs/#/cn/algorithm_manager_cn)<br/> |
-| cyberdog_tracking_base | https://github.com/MiRoboticsLab/cyberdog_tracking_base | 存放了基于navigation2实现的docking， navigation， tracking功能相关的参数<br/>附加模块等 |                                                              |
-| utils                  | https://github.com/MiRoboticsLab/utils                  | 通用接口库                                                   | [通用接口库](https://miroboticslab.github.io/blogs/#/cn/cyberdog_common_cn)<br/> |
-
-
-
 ## 开发者模式解锁（前置条件）
 
 CyberDog 2 出厂默认未开启 SSH 访问，需要先解锁才能进行开发。由于小米官方已停止维护，在线申请解锁已不可用，可通过以下方式手动解锁：
