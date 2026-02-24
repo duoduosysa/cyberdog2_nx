@@ -342,6 +342,8 @@ NX 和 MR813 之间通过 LCM（UDP 多播）通信，**不是 CAN 总线**。
 
 > **注意**：Dockerfile 中的依赖包从 `cnbj2m.fds.api.xiaomi.com` 下载，该服务器可能已关闭。如遇下载失败，请优先使用 NX 上直接编译的方式。
 
+官方推荐的docker在实际的编译过程中报错频繁，而且缺库，部分库在小米机器狗2的nv心里面。因此我们采用在nx里面进行编译，缺少的库文件，可以反向从docker镜像里面拷贝。相关的文件通过网盘分享的文件：cyberdog2docker 链接: https://pan.baidu.com/s/1WjVSxEnjGoRcLz_3fDDTIg?pwd=rwae
+
 ## 使用示例
 可作为开发用参考demo，非原生功能
 
